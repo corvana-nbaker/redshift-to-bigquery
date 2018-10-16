@@ -1,0 +1,15 @@
+.DS_Store
+*.iml
+*.ipr
+*.iws
+.idea/
+target/
+out/
+dependency-reduced-pom.xml
+node_modules
+package-lock.json
+*.lock
+run-debug
+yarn-error.log
+build/
+.gradle/

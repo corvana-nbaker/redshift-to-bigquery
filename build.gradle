@@ -1,0 +1,56 @@
+buildscript {
+    // https://stackoverflow.com/a/15403327/586148
+    ext.corvanaCreds = new XmlSlurper().parse(new File(System.getProperty("user.home"), ".m2/settings.xml"))."servers"."server"
+            .find { it."id".text() == "repo.corvana.com" }
+
+    ext.mavenUrl = "${System.properties.getOrDefault('corvana.nexus.baseurl', 'https://repo.corvana.com')}/repository/maven/"
+    ext.mavenReleases = "${System.properties.getOrDefault('corvana.nexus.baseurl', 'https://repo.corvana.com')}/repository/corvana-releases/"
+    ext.mavenSnapshots = "${System.properties.getOrDefault('corvana.nexus.baseurl', 'https://repo.corvana.com')}/repository/corvana-snapshots/"
+
+    ext.corvanaRepos = {
+        maven {
+            credentials {
+                username corvanaCreds.username.text()
+                password corvanaCreds.password.text()
+            }
+            url mavenUrl
+        }
+        maven {
+            url uri("${System.getProperty('user.home')}/.m2/repository")
+        }
+    }
+
+    repositories corvanaRepos
+}
+
+plugins {
+    // Apply the java plugin to add support for Java
+    id 'java'
+
+    // Apply the application plugin to add support for building an application
+    id 'application'
+		
+    id 'idea'
+    id 'maven'
+}
+
+// Define the main class for the application
+mainClassName = 'App'
+
+dependencies {
+    // This dependency is found on compile classpath of this component and consumers.
+    compile 'com.google.guava:guava:23.0'
+    compile 'com.amazon.redshift:redshift-jdbc42-no-awssdk:1.2.10.1009'
+    compile 'com.google.cloud:google-cloud-bigquery:1.48.0'
+    compile 'org.apache.commons:commons-dbcp2:2.0'
+    compile 'org.slf4j:slf4j-api:1.7.12'
+    compile 'org.slf4j:slf4j-simple:1.7.12'
+    compile 'com.opencsv:opencsv:4.3.1'
+    compile 'com.amazonaws:aws-java-sdk-s3:1.11.238'
+    compile 'org.apache.commons:commons-csv:1.5'
+
+    // Use JUnit test framework
+    testCompile 'junit:junit:4.12'
+}
+
+repositories corvanaRepos
