@@ -37,7 +37,7 @@ public class QueryConverter {
 
         // datediff
         // FROM      DATEDIFF('DAY', MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`), MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`))
-        // TO        DATE_DIFF(MIN(DATE(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`)), MAX(DATE(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`)), DAY)
+        // TO        TIMESTAMP_DIFF(MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c_currentrecord`.`Opportunity_Term_Start_Date__c`), MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c_currentrecord`.`Opportunity_Term_Start_Date__c`), DAY)
 
         // another dateadd
         // FROM      DATEADD('day', `rownum`, `mindate`)
@@ -128,16 +128,31 @@ public class QueryConverter {
     }
 
     // FROM      TO_CHAR("date", 'MM-Mon')
-    // TO        FORMAT_DATE('MM-Mon', `date`)
+    // TO        TIMESTAMP_FORMAT('%m-%h', `date`)
+    // FROM      TO_CHAR("date", 'Q')
+    // TO        CAST(EXTRACT(QUARTER FROM `date`) AS STRING)
     private static String fixDateToChar(String sql) {
-        String regex = "TO_CHAR\\(\\\"([^\\\"]*)\\\",\\s*'([^']*)'\\)";
+
+        // TODO: support table.column ref as well
+
+        String regex = "TO_CHAR\\(\"([^\"]*)\",\\s*'([^']*)'\\)";
         Pattern p = Pattern.compile(regex);
         Matcher m = p.matcher(sql);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {
-            String datePart = m.group(1);
-            String field = m.group(2);
-            String fixed = String.format("FORMAT_DATE('%s', `%s`)", field, datePart);
+            String datePart = m.group(2);
+            String field = m.group(1);
+            String fixed = "";
+            if (datePart.equalsIgnoreCase("YYYY")) {
+                datePart = "%E4Y";
+                fixed = String.format("TIMESTAMP_FORMAT('%s', `%s`)", datePart, field);
+            } else if (datePart.equalsIgnoreCase("MM-Mon")) {
+                datePart = "%m-%h";
+                fixed = String.format("TIMESTAMP_FORMAT('%s', `%s`)", datePart, field);
+            } else if (datePart.equalsIgnoreCase("Q")) {
+                fixed = String.format("CAST(EXTRACT(QUARTER FROM `%s`) AS STRING)", field);
+            }
+
             m.appendReplacement(sb, fixed);
         }
         m.appendTail(sb);
