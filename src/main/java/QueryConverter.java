@@ -21,7 +21,7 @@ public class QueryConverter {
     public static void main(String[] args) {
         String tableNameRegex = "(\"slapshot[^\"]*\")";
 
-        String sql = tableNameSubstitution(tableNameRegex, Q5, "[^\"A-Za-z0-9_]", "_");
+        String sql = tableNameSubstitution(tableNameRegex, BIGGEST, "[^\"A-Za-z0-9_]", "_");
 
         // TODO: these are too greedy, FROM can be used in EXTRACT method too
         sql = fromClauseTableNameSubstitution(sql, "slapshot", "FROM");
@@ -31,6 +31,8 @@ public class QueryConverter {
         sql = fixDateAdd(sql);
         sql = fixDateTrunc(sql);
         sql = fixDateToChar(sql);
+        sql = fixDateDiff(sql);
+        sql = fixConcat(sql);
 
         sql = sql.replaceAll("\"", "`");
         sql = sql.replaceAll("GETDATE\\(\\)", "CURRENT_DATE()");
@@ -42,14 +44,6 @@ public class QueryConverter {
         // substring
         // FROM      SUBSTRING(`measures`.`window_outer_5` FROM 4 FOR 3)
         // TO        SUBSTR(`measures`.`window_outer_5`, 4, 3)
-
-        // datediff
-        // FROM      DATEDIFF('DAY', MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`), MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`))
-        // TO        TIMESTAMP_DIFF(MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c_currentrecord`.`Opportunity_Term_Start_Date__c`), MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c_currentrecord`.`Opportunity_Term_Start_Date__c`), DAY)
-
-        // another dateadd
-        // FROM      DATEADD('day', `rownum`, `mindate`)
-        // TO        DATE_ADD(DATE(`mindate`), INTERVAL `rownum` DAY)
         // --------------------------------------------------------------------------
 
         System.out.println(sql);
@@ -84,6 +78,7 @@ public class QueryConverter {
 
     /**
      * replaces <code>DATEADD('MONTH', -1, GETDATE())</code> with <code>DATE_ADD(CURRENT_DATE(), INTERVAL -1 MONTH)</code>
+     * and <code>DATEADD('DAY', "rownum", "mindate")</code> with <code>TIMESTAMP_ADD(`mindate`, INTERVAL `rownum` DAY)</code>
      * @param sql
      * @return
      */
@@ -99,6 +94,21 @@ public class QueryConverter {
             m.appendReplacement(sb, fixed);
         }
         m.appendTail(sb);
+
+        String sql2 = sb.toString();
+        regex = "DATEADD\\('([A-Za-z]*)',\\s*\"([^\"]*)\",\\s*\"([^\"]*)\"\\)";
+        p = Pattern.compile(regex);
+        m = p.matcher(sql2);
+        sb = new StringBuffer();
+        while (m.find()) {
+            String datePart = m.group(1);
+            String intervalField = m.group(2);
+            String timestampField = m.group(3);
+            String fixed = String.format("TIMESTAMP_ADD(`%s`, INTERVAL `%s` %s)", timestampField, intervalField, datePart);
+            m.appendReplacement(sb, fixed);
+        }
+        m.appendTail(sb);
+
         return sb.toString();
     }
 
@@ -189,6 +199,45 @@ public class QueryConverter {
         }
         m.appendTail(sb);
 
+        return sb.toString();
+    }
+
+    // datediff
+    // FROM      DATEDIFF('DAY', MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`), MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`))
+    // TO        TIMESTAMP_DIFF(MAX(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`), MIN(`slapshot_c31fcac5_fb77_4703_9f2d_3fbe27b03c8c`.`date`), DAY)
+    private static String fixDateDiff(String sql) {
+        String regex = "DATEDIFF\\('([^']*)',\\s*([^,]*),\\s*([^)]*\\))\\)";
+        Pattern p = Pattern.compile(regex);
+        Matcher m = p.matcher(sql);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String datePart = m.group(1);
+            String val1 = m.group(2);
+            String val2 = m.group(3);
+            String fixed = String.format("TIMESTAMP_DIFF(%s, %s, %s)", val2, val1, datePart);
+
+            m.appendReplacement(sb, fixed);
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    // concat
+    // FROM      'Q' || "dimensions"."c1"
+    // TO        CONCAT('Q', CAST("dimensions"."c1" AS STRING))
+    private static String fixConcat(String sql) {
+        String regex = "('[^']*') \\|\\| (\\\"[^\\.]*\\.\\\"[^\\s]*)";
+        Pattern p = Pattern.compile(regex);
+        Matcher m = p.matcher(sql);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String stringBase = m.group(1);
+            String field = m.group(2);
+            String fixed = String.format("CONCAT(%s, CAST(%s AS STRING))", stringBase, field);
+
+            m.appendReplacement(sb, fixed);
+        }
+        m.appendTail(sb);
         return sb.toString();
     }
 }
