@@ -156,6 +156,33 @@ public class QueryConverter {
             m.appendReplacement(sb, fixed);
         }
         m.appendTail(sb);
+
+        String sql2 = sb.toString();
+
+        // try table.column now too
+        regex = "TO_CHAR\\(\"([^\"]*)\"\\.\"([^\"]*)\",\\s*'([^']*)'\\)";
+        p = Pattern.compile(regex);
+        m = p.matcher(sql2);
+        sb = new StringBuffer();
+        while (m.find()) {
+            String datePart = m.group(3);
+            String table = m.group(1);
+            String field = m.group(2);
+            String fixed = "";
+            if (datePart.equalsIgnoreCase("YYYY")) {
+                datePart = "%E4Y";
+                fixed = String.format("TIMESTAMP_FORMAT('%s', `%s`.`%s`)", datePart, table, field);
+            } else if (datePart.equalsIgnoreCase("MM-Mon")) {
+                datePart = "%m-%h";
+                fixed = String.format("TIMESTAMP_FORMAT('%s', `%s`.`%s`)", datePart, table, field);
+            } else if (datePart.equalsIgnoreCase("Q")) {
+                fixed = String.format("CAST(EXTRACT(QUARTER FROM `%s`.`%s`) AS STRING)", table, field);
+            }
+
+            m.appendReplacement(sb, fixed);
+        }
+        m.appendTail(sb);
+
         return sb.toString();
     }
 }
